@@ -1,10 +1,11 @@
 import click
 import pandas as pd
 import numpy as np
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Optional
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from awq import AutoAWQForCausalLM
+from huggingface_hub import HfApi
 
 def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTokenizerBase) -> List[str]:
     print(f"Loading calibration data from {parquet_path}...")
@@ -45,6 +46,8 @@ def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTok
 @click.option("--q_group_size", type=int, default=128, help="Group size for quantization")
 @click.option("--w_bit", type=int, default=4, help="Weight bit width")
 @click.option("--version", type=str, default="GEMM", help="Quantization version")
+@click.option("--push_to_hub", is_flag=True, help="Whether to push the quantized model to the Hugging Face Hub")
+@click.option("--hub_repo_id", type=str, default=None, help="The Hugging Face Hub repository ID to push to (e.g., 'username/model-name')")
 def main(
     model_path: str,
     calib_data: str,
@@ -52,7 +55,9 @@ def main(
     zero_point: bool,
     q_group_size: int,
     w_bit: int,
-    version: str
+    version: str,
+    push_to_hub: bool,
+    hub_repo_id: Optional[str]
 ) -> None:
     """Quantize T-lite-it-2.1 with AutoAWQ using custom parquet calibration data."""
 
@@ -79,6 +84,19 @@ def main(
     model.save_quantized(quant_path)
     tokenizer.save_pretrained(quant_path)
     print("Done!")
+
+    if push_to_hub:
+        if not hub_repo_id:
+            print("Error: --hub_repo_id must be provided if --push_to_hub is used.")
+            return
+        print(f"Pushing to Hugging Face Hub: {hub_repo_id}...")
+        api = HfApi()
+        api.upload_folder(
+            folder_path=quant_path,
+            repo_id=hub_repo_id,
+            repo_type="model",
+        )
+        print("Successfully pushed to Hugging Face Hub!")
 
 if __name__ == "__main__":
     main()

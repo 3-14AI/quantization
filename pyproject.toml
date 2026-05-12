@@ -1,0 +1,15 @@
+[project]
+name = "app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "autoawq>=0.2.9",
+    "click>=8.3.3",
+    "fastparquet>=2026.3.0",
+    "huggingface-hub>=1.14.0",
+    "pandas>=3.0.3",
+    "pyarrow>=24.0.0",
+    "transformers>=5.8.0",
+]
