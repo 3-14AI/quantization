@@ -1,3 +1,4 @@
+import json
 import click
 import pandas as pd
 import numpy as np
@@ -13,30 +14,50 @@ def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTok
 
     formatted_data: List[str] = []
     for _, row in df.iterrows():
-        messages: Union[List[Dict[str, Any]], np.ndarray, None] = row.get("messages")
-        format_output: Any = row.get("format_output")
+        request_str: str = row.get("request")
+        response_str: str = row.get("response")
 
-        if messages is None:
+        if pd.isna(request_str) or not request_str:
             continue
 
-        # Handle numpy arrays to lists if needed
-        if isinstance(messages, np.ndarray):
-            messages = messages.tolist()
-
-        if len(messages) == 0:
+        try:
+            request = json.loads(request_str)
+        except json.JSONDecodeError:
             continue
 
-        # Apply chat template
-        text: str = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+        messages = request.get("messages", [])
+        if not messages:
+            continue
 
-        # If there is an output, append it manually
-        if pd.notna(format_output) and format_output:
-             text += str(format_output)
+        if pd.notna(response_str) and response_str:
+            try:
+                response = json.loads(response_str)
+                if response and "choices" in response and len(response["choices"]) > 0:
+                    messages.append(response["choices"][0]["message"])
+            except json.JSONDecodeError:
+                pass
 
-        formatted_data.append(text)
+        kwargs = {}
+        if "tools" in request:
+            kwargs["tools"] = request["tools"]
+        if "response_format" in request:
+            kwargs["response_format"] = request["response_format"]
+
+        try:
+            text: str = tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False,
+                **kwargs
+            )
+            formatted_data.append(text)
+        except Exception as e:
+            print(f"Warning: Failed to format conversation: {e}")
+            continue
 
     print(f"Loaded and formatted {len(formatted_data)} examples.")
     return formatted_data
+
 
 @click.command()
 @click.option("--model_path", type=str, default="t-tech/T-lite-it-2.1", help="Path to the model or HF model ID")
