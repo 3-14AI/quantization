@@ -13,3 +13,8 @@ dependencies = [
     "pyarrow>=24.0.0",
     "transformers>=5.8.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
