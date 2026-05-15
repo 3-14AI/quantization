@@ -3,10 +3,12 @@ import click
 import pandas as pd
 import numpy as np
 from typing import List, Dict, Any, Union, Optional
+
+from tqdm import tqdm
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from awq import AutoAWQForCausalLM
-from huggingface_hub import HfApi
+from huggingface_hub import HfApi, hf_hub_download, login
 
 import os
 import subprocess
@@ -20,7 +22,7 @@ def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTok
     df = pd.read_parquet(parquet_path)
 
     formatted_data: List[str] = []
-    for _, row in df.iterrows():
+    for _, row in tqdm(df.iterrows(), total=len(df)):
         request_str: str = row.get("request")
         response_str: str = row.get("response")
 
@@ -68,8 +70,8 @@ def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTok
 
 @click.command()
 @click.option("--model_path", type=str, default="t-tech/T-lite-it-2.1", help="Path to the model or HF model ID")
-@click.option("--calib_data", type=str, required=True, help="Path to the parquet calibration data file")
-@click.option("--quant_path", type=str, default="T-lite-it-2.1-awq", help="Path to save the quantized model")
+@click.option("--calib_data", type=str, default="calibration_dataset_final.parquet", help="Path to the parquet calibration data file")
+@click.option("--quant_path", type=str, default=None, help="Path to save the quantized model")
 @click.option("--zero_point", type=bool, default=True, help="Use zero point for quantization")
 @click.option("--q_group_size", type=int, default=128, help="Group size for quantization")
 @click.option("--method", type=click.Choice(['awq', 'exl2']), default="awq", help="Quantization method to use")
@@ -82,7 +84,7 @@ def load_and_format_calibration_data(parquet_path: str, tokenizer: PreTrainedTok
 def main(
     model_path: str,
     calib_data: str,
-    quant_path: str,
+    quant_path: Optional[str],
     method: str,
     zero_point: bool,
     q_group_size: int,
@@ -94,10 +96,15 @@ def main(
     hub_repo_id: Optional[str]
 ) -> None:
     """Quantize a model using AutoAWQ or EXL2 with custom parquet calibration data."""
-
     print(f"Loading tokenizer from {model_path}...")
     tokenizer: PreTrainedTokenizerBase = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-
+    if quant_path is None:
+        quant_path = model_path.partition("/")[-1]
+        if method == "awq":
+            quant_path += f"-{method.upper()}-{w_bit}bits"
+        elif method == "exl2":
+            quant_path += f"-{method.upper()}-{exl2_bits}bpw-{exl2_head_bits}hlbpw"
+    quant_path = quant_path.replace("/", "__").replace(".", "__").replace(":", "_")
     calib_texts: List[str] = load_and_format_calibration_data(calib_data, tokenizer)
 
     if method == "awq":
@@ -187,11 +194,16 @@ def main(
         finally:
             # Clean up temporary directory
             shutil.rmtree(temp_dir, ignore_errors=True)
+    else:
+        raise ValueError(f"Method {method} not allowed")
 
     if push_to_hub:
         if not hub_repo_id:
-            print("Error: --hub_repo_id must be provided if --push_to_hub is used.")
-            return
+            hub_repo_id = "pimenovdv/" + model_path.partition("/")[-1]
+            if method == "awq":
+                hub_repo_id += f"-{method.upper()}-{w_bit}bits"
+            elif method == "exl2":
+                hub_repo_id += f"-{method.upper()}-{exl2_bits}bpw-{exl2_head_bits}hlbpw"
         print(f"Pushing to Hugging Face Hub: {hub_repo_id}...")
         api = HfApi()
         api.upload_folder(
@@ -202,4 +214,10 @@ def main(
         print("Successfully pushed to Hugging Face Hub!")
 
 if __name__ == "__main__":
+    login()
+    hf_hub_download(
+        "pimenovdv/calibration", "calibration_dataset_final.parquet",
+        local_dir=".",
+        repo_type="dataset",
+    )
     main()
