@@ -175,7 +175,7 @@ def main(
                 raise RuntimeError("Could not find exllamav2 conversion script convert_exl2.py")
 
         cmd = [
-            "python", exl2_convert_script,
+            "python", "-m", "exllamav2.conversion.convert_exl2",
             "-i", local_model_path,
             "-o", exl2_work_dir,
             "-cf", quant_path,
