@@ -33,13 +33,27 @@ def check_model_works(quant_path: str, method: str) -> bool:
             from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
             from exllamav2.generator import ExLlamaV2BaseGenerator
 
-            config = ExLlamaV2Config(quant_path)
+            config = ExLlamaV2Config()
+            config.model_dir = quant_path
             config.prepare()
             model = ExLlamaV2(config)
             model.load()
-            tokenizer = ExLlamaV2Tokenizer(quant_path)
-            generator = ExLlamaV2BaseGenerator(model, tokenizer)
-            generator.generate_simple("Test", max_new_tokens=1)
+            # 3. Создание кэша (ОБЯЗАТЕЛЬНО для работы генератора)
+            cache = ExLlamaV2Cache(model, lazy=True)
+            # Метод load_autosplit автоматически и безопасно распределит память
+            model.load_autosplit(cache) 
+
+            # 4. Инициализация токенизатора (передаем config, а не строку)
+            tokenizer = ExLlamaV2Tokenizer(config)
+            # 5. Инициализация генератора (передаем модель, КЭШ и токенизатор)
+            generator = ExLlamaV2BaseGenerator(model, cache, tokenizer)
+
+            # 6. Настройки сэмплера (необходимы для метода generate_simple)
+            settings = ExLlamaV2Sampler.Settings()
+
+            # 7. Генерация
+            output = generator.generate_simple("Test", gen_settings=settings, num_tokens=1)
+            print(output)
             return True
         return False
     except Exception as e:
