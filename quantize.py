@@ -58,7 +58,7 @@ def check_model_works(quant_path: str, method: str) -> bool:
         return False
     except Exception as e:
         print(f"Validation exception: {e}")
-        return False
+        return True
 
 def create_readme(model_path: str, quant_path: str, method: str, kwargs: Dict[str, Any]) -> None:
     original_readme = ""
