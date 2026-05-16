@@ -30,8 +30,8 @@ def check_model_works(quant_path: str, method: str) -> bool:
         elif method == "exl2":
             import os
             os.environ["EXLLAMA_NO_COMPILE"] = "1"
-            from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer
-            from exllamav2.generator import ExLlamaV2BaseGenerator
+            from exllamav2 import ExLlamaV2, ExLlamaV2Config, ExLlamaV2Tokenizer, ExLlamaV2Cache
+            from exllamav2.generator import ExLlamaV2BaseGenerator, ExLlamaV2Sampler
 
             config = ExLlamaV2Config()
             config.model_dir = quant_path
